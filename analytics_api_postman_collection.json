@@ -1,0 +1,409 @@
+{
+  "info": {
+    "name": "Music Analytics API",
+    "description": "Complete collection of analytics endpoints for music catalog data",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8002",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Overview & Trends",
+      "item": [
+        {
+          "name": "Get Overview Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/overview",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "overview"]
+            },
+            "description": "Get high-level overview statistics including total revenue, streams, artists, tracks, platforms, countries, and average CPM."
+          }
+        },
+        {
+          "name": "Get Yearly Trends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/trends/yearly",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "trends", "yearly"]
+            },
+            "description": "Get year-over-year trends with growth percentages."
+          }
+        },
+        {
+          "name": "Get Monthly Trends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/trends/monthly",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "trends", "monthly"]
+            },
+            "description": "Get monthly trends. Optionally filter by year using ?year=2024"
+          }
+        },
+        {
+          "name": "Get Monthly Trends (2024)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/trends/monthly?year=2024",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "trends", "monthly"],
+              "query": [
+                {
+                  "key": "year",
+                  "value": "2024"
+                }
+              ]
+            },
+            "description": "Get monthly trends for 2024 only."
+          }
+        },
+        {
+          "name": "Get Quarterly Trends",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/trends/quarterly",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "trends", "quarterly"]
+            },
+            "description": "Get quarterly trends."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Artists",
+      "item": [
+        {
+          "name": "Get Top Artists (Revenue)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/artists/top?limit=20&metric=revenue",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "artists", "top"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "metric",
+                  "value": "revenue"
+                }
+              ]
+            },
+            "description": "Get top 20 artists by revenue."
+          }
+        },
+        {
+          "name": "Get Top Artists (Streams)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/artists/top?limit=20&metric=streams",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "artists", "top"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "metric",
+                  "value": "streams"
+                }
+              ]
+            },
+            "description": "Get top 20 artists by streams."
+          }
+        },
+        {
+          "name": "Get Artist Growth Matrix",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/artists/growth?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "artists", "growth"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Get artist growth matrix (2023 vs 2024) with categorization: new_star, rising_star, stable_star, breakthrough."
+          }
+        },
+        {
+          "name": "Get Artist Diversity",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/artists/diversity?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "artists", "diversity"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Get artist diversification metrics (platforms, countries, tracks)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tracks",
+      "item": [
+        {
+          "name": "Get Top Tracks (Revenue)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/tracks/top?limit=20&metric=revenue",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "tracks", "top"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "metric",
+                  "value": "revenue"
+                }
+              ]
+            },
+            "description": "Get top 20 tracks by revenue."
+          }
+        },
+        {
+          "name": "Get Top Tracks (Streams)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/tracks/top?limit=20&metric=streams",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "tracks", "top"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                },
+                {
+                  "key": "metric",
+                  "value": "streams"
+                }
+              ]
+            },
+            "description": "Get top 20 tracks by streams."
+          }
+        },
+        {
+          "name": "Get Track Lifecycle",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/tracks/lifecycle?limit=15",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "tracks", "lifecycle"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "15"
+                }
+              ]
+            },
+            "description": "Get track lifecycle analysis: long-running tracks and most profitable per month."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Platforms",
+      "item": [
+        {
+          "name": "Get Platform Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/platforms?limit=15",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "platforms"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "15"
+                }
+              ]
+            },
+            "description": "Get platform statistics with revenue, streams, and CPM."
+          }
+        },
+        {
+          "name": "Get Platform Growth",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/platforms/growth",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "platforms", "growth"]
+            },
+            "description": "Get platform growth trends (2023 vs 2024)."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Geography",
+      "item": [
+        {
+          "name": "Get Country Stats (Revenue)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/countries?limit=15&sort_by=revenue",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "countries"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "15"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "revenue"
+                }
+              ]
+            },
+            "description": "Get top 15 countries by revenue."
+          }
+        },
+        {
+          "name": "Get Country Stats (CPM)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/countries?limit=15&sort_by=cpm",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "countries"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "15"
+                },
+                {
+                  "key": "sort_by",
+                  "value": "cpm"
+                }
+              ]
+            },
+            "description": "Get top 15 countries by CPM."
+          }
+        },
+        {
+          "name": "Get Country × Platform CPM",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/countries/platform-cpm?limit=20",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "countries", "platform-cpm"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "20"
+                }
+              ]
+            },
+            "description": "Get top 20 country × platform combinations by CPM."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Business Intelligence",
+      "item": [
+        {
+          "name": "Get Revenue Concentration",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/concentration",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "concentration"]
+            },
+            "description": "Get revenue concentration analysis for artists and tracks."
+          }
+        },
+        {
+          "name": "Get Label Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/labels?limit=10",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "labels"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "10"
+                }
+              ]
+            },
+            "description": "Get top 10 labels with revenue, artists, tracks, and CPM."
+          }
+        },
+        {
+          "name": "Get Sale Type Stats",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/analytics/sale-types",
+              "host": ["{{base_url}}"],
+              "path": ["analytics", "sale-types"]
+            },
+            "description": "Get sale type statistics (streaming, download, etc.)."
+          }
+        }
+      ]
+    }
+  ]
+}
+

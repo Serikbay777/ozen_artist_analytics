@@ -1,0 +1,61 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual Environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Environment
+.env
+
+# Tests
+test_*.py
+*_test.py
+tests/
+
+# Documentation
+*.md
+!README.md
+
+# Reports (will be generated in container)
+reports/*.csv
+reports/*.json
+reports/*.md
+
+# Temporary files
+*.log
+*.pkl
+*.tmp
+
+# Node
+node_modules/
+package.json
+package-lock.json
+
+# Docker
+Dockerfile
+docker-compose*.yml
+.dockerignore
