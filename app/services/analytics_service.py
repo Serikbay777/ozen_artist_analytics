@@ -22,32 +22,79 @@ class AnalyticsService:
     _df = None
     _initialized = False
     
-    def __new__(cls, data_path: str = None):
+    def __new__(cls, data_dir: str = None):
         """Singleton pattern - only one instance with loaded data"""
         if cls._instance is None:
             cls._instance = super(AnalyticsService, cls).__new__(cls)
         return cls._instance
     
-    def __init__(self, data_path: str = None):
-        """Initialize analytics service with data path"""
+    def __init__(self, data_dir: str = None):
+        """Initialize analytics service with data directory"""
         # Only load data once
         if self._initialized:
             return
             
-        if data_path is None:
-            # Default path to processed data
+        if data_dir is None:
+            # Default path to processed data directory
             base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            data_path = os.path.join(base_dir, 'data', 'processed', 'all_believe_data.pkl')
+            data_dir = os.path.join(base_dir, 'data', 'processed')
         
-        self.data_path = data_path
+        self.data_dir = data_dir
         self._load_data()
         self._initialized = True
         print(f"✅ AnalyticsService initialized with {len(self._df):,} rows")
     
     def _load_data(self):
-        """Load and prepare data"""
+        """Load and prepare data from all CSV files in processed directory"""
         try:
-            self._df = pd.read_pickle(self.data_path)
+            import glob
+            
+            # Find all CSV files in processed directory
+            csv_files = glob.glob(os.path.join(self.data_dir, '*.csv'))
+            
+            if not csv_files:
+                raise Exception(f"No CSV files found in {self.data_dir}")
+            
+            print(f"📁 Loading {len(csv_files)} CSV files from {self.data_dir}")
+            
+            # Required columns for compatibility
+            required_cols = ['Месяц отчета', 'Исполнитель', 'Название трека', 'Платформа', 'Сумма вознаграждения', 'Количество']
+            
+            # Read all CSV files
+            dfs = []
+            for csv_file in csv_files:
+                try:
+                    # Try reading with different separators
+                    df = None
+                    for sep in [',', ';']:
+                        try:
+                            df = pd.read_csv(csv_file, sep=sep, low_memory=False)
+                            # Check if we have required columns
+                            if all(col in df.columns for col in required_cols):
+                                break
+                            df = None
+                        except:
+                            continue
+                    
+                    if df is not None and len(df) > 0:
+                        dfs.append(df)
+                        print(f"   ✓ Loaded {os.path.basename(csv_file)}: {len(df):,} rows")
+                    else:
+                        print(f"   ⊘ Skipped {os.path.basename(csv_file)}: incompatible format (missing required columns)")
+                        
+                except Exception as e:
+                    print(f"   ✗ Error loading {os.path.basename(csv_file)}: {e}")
+            
+            if not dfs:
+                raise Exception("Failed to load any compatible CSV files")
+            
+            # Combine all dataframes
+            self._df = pd.concat(dfs, ignore_index=True)
+            print(f"   📊 Total rows: {len(self._df):,}")
+            
+            # Convert date column
+            if 'Месяц отчета' in self._df.columns:
+                self._df['Месяц отчета'] = pd.to_datetime(self._df['Месяц отчета'], errors='coerce')
             
             # Prepare derived columns
             self._df['year'] = self._df['Месяц отчета'].dt.year
