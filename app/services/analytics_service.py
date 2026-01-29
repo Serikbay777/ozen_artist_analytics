@@ -53,7 +53,9 @@ class AnalyticsService:
             csv_files = glob.glob(os.path.join(self.data_dir, '*.csv'))
             
             if not csv_files:
-                raise Exception(f"No CSV files found in {self.data_dir}")
+                print(f"⚠️  No CSV files found in {self.data_dir}, starting with empty dataset")
+                self._df = pd.DataFrame()
+                return
             
             print(f"📁 Loading {len(csv_files)} CSV files from {self.data_dir}")
             
