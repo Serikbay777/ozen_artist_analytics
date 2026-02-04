@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Any, Optional
 from dotenv import load_dotenv
 from app.agents.WorkflowManager import WorkflowManager
-from app.routers import analytics, artist_analytics, data_management
+from app.routers import analytics, artist_analytics, data_management, reports
 import logging
 
 # Load environment variables from .env file
@@ -36,6 +36,7 @@ app.add_middleware(
 app.include_router(analytics.router)
 app.include_router(artist_analytics.router)
 app.include_router(data_management.router)
+app.include_router(reports.router)
 
 # Initialize agent
 workflow_manager = WorkflowManager()

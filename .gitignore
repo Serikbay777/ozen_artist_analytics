@@ -1,49 +1,28 @@
-# Virtual Environment
-venv/
-env/
-ENV/
-
 # Python
 __pycache__/
-*.pyc
-*.pyo
-*.pkl
-*.egg-info/
-dist/
-build/
+*.py[cod]
+*$py.class
+*.so
+.Python
 
-# Environment Variables
+# Environment
 .env
-.env.local
-.env.production
-# Allow .env.example
-!.env.example
+.venv
+env/
+venv/
 
-# Database
-*.db
-
-# OS
+# macOS
 .DS_Store
-Thumbs.db
-*.swp
-*.swo
+
+# Data files
+data/
+*.csv
+*.json
+
+# Reports (except README files)
+reports/
+!reports/**/README.md
 
 # IDE
 .vscode/
 .idea/
-*.sublime-*
-
-# Logs
-*.log
-
-# Reports (generated files)
-reports/*.csv
-reports/*.json
-reports/*.md
-
-# Data files (too large for git)
-data/*.csv
-data/**/*.csv
-
-# Schema file
-schema_only.db
