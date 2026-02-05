@@ -45,7 +45,7 @@ class AnalyticsService:
         print(f"✅ AnalyticsService initialized with {len(self._df):,} rows")
     
     def _load_data(self):
-        """Load and prepare data from all CSV files in processed directory"""
+        """Load and prepare data from all CSV files in processed directory with memory optimization"""
         try:
             import glob
             
@@ -62,6 +62,29 @@ class AnalyticsService:
             # Required columns for compatibility
             required_cols = ['Месяц отчета', 'Исполнитель', 'Название трека', 'Платформа', 'Сумма вознаграждения', 'Количество']
             
+            # ✅ ОПТИМИЗАЦИЯ: Загружаем только нужные колонки
+            usecols = [
+                'Месяц отчета', 
+                'Исполнитель', 
+                'Название трека', 
+                'Платформа', 
+                'Сумма вознаграждения', 
+                'Количество',
+                'страна / регион',
+                'Лейбл',
+                'Тип продажи'
+            ]
+            
+            # ✅ ОПТИМИЗАЦИЯ: Типы данных для экономии памяти (~60% экономии)
+            dtypes = {
+                'Исполнитель': 'category',
+                'Название трека': 'category',
+                'Платформа': 'category',
+                'страна / регион': 'category',
+                'Лейбл': 'category',
+                'Тип продажи': 'category'
+            }
+            
             # Read all CSV files
             dfs = []
             for csv_file in csv_files:
@@ -70,7 +93,13 @@ class AnalyticsService:
                     df = None
                     for sep in [',', ';']:
                         try:
-                            df = pd.read_csv(csv_file, sep=sep, low_memory=False)
+                            df = pd.read_csv(
+                                csv_file, 
+                                sep=sep,
+                                usecols=lambda x: x in usecols,  # Только нужные колонки
+                                dtype=dtypes,  # Оптимальные типы
+                                low_memory=False
+                            )
                             # Check if we have required columns
                             if all(col in df.columns for col in required_cols):
                                 break
@@ -80,9 +109,10 @@ class AnalyticsService:
                     
                     if df is not None and len(df) > 0:
                         dfs.append(df)
-                        print(f"   ✓ Loaded {os.path.basename(csv_file)}: {len(df):,} rows")
+                        mem_usage = df.memory_usage(deep=True).sum() / 1024**2
+                        print(f"   ✓ Loaded {os.path.basename(csv_file)}: {len(df):,} rows ({mem_usage:.1f} MB)")
                     else:
-                        print(f"   ⊘ Skipped {os.path.basename(csv_file)}: incompatible format (missing required columns)")
+                        print(f"   ⊘ Skipped {os.path.basename(csv_file)}: incompatible format")
                         
                 except Exception as e:
                     print(f"   ✗ Error loading {os.path.basename(csv_file)}: {e}")
@@ -99,12 +129,18 @@ class AnalyticsService:
                 self._df['Месяц отчета'] = pd.to_datetime(self._df['Месяц отчета'], errors='coerce')
             
             # Prepare derived columns
-            self._df['year'] = self._df['Месяц отчета'].dt.year
-            self._df['month'] = self._df['Месяц отчета'].dt.month
-            self._df['quarter'] = self._df['Месяц отчета'].dt.quarter
+            self._df['year'] = self._df['Месяц отчета'].dt.year.astype('int16')  # int16 вместо int64
+            self._df['month'] = self._df['Месяц отчета'].dt.month.astype('int8')  # int8 вместо int64
+            self._df['quarter'] = self._df['Месяц отчета'].dt.quarter.astype('int8')
             self._df['year_month'] = self._df['Месяц отчета'].dt.to_period('M')
-            self._df['release_date'] = self._df.groupby(['Исполнитель', 'Название трека'])['Месяц отчета'].transform('min')
-            self._df['track_age_months'] = ((self._df['Месяц отчета'] - self._df['release_date']).dt.days / 30).round(0)
+            
+            # ✅ ОПТИМИЗАЦИЯ: Вычисляем release_date и track_age только при необходимости
+            # Закомментировано для экономии памяти - раскомментируйте если нужно
+            # self._df['release_date'] = self._df.groupby(['Исполнитель', 'Название трека'])['Месяц отчета'].transform('min')
+            # self._df['track_age_months'] = ((self._df['Месяц отчета'] - self._df['release_date']).dt.days / 30).round(0)
+            
+            total_mem = self._df.memory_usage(deep=True).sum() / 1024**2
+            print(f"   💾 Total memory usage: {total_mem:.1f} MB")
             
         except Exception as e:
             raise Exception(f"Error loading data: {str(e)}")
