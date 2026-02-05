@@ -17,7 +17,7 @@ from .artist_analytics_agent_tools import (
     ArtistTracksTool,
     ArtistFullAnalyticsTool
 )
-from .report_generation_tools import GenerateArtistReportTool
+from .report_generation_tools import GenerateArtistReportTool, GenerateDocxReportTool
 
 # Список всех доступных инструментов
 ALL_TOOLS = [
@@ -41,6 +41,8 @@ ALL_TOOLS = [
     ArtistFullAnalyticsTool(),
     # Генерация PDF-отчетов
     GenerateArtistReportTool(),
+    # Генерация DOCX-отчетов (с поддержкой шаблонов и курса валют)
+    GenerateDocxReportTool(),
 ]
 
 __all__ = [

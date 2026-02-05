@@ -204,7 +204,7 @@ class ArtistReportGenerator:
         }
     
     def _create_pdf(self, data: dict, period: str, include_medialand: bool):
-        """Создает PDF-файл"""
+        """Создает PDF-файл в стиле özen отчетов"""
         
         # Формируем имя файла
         safe_name = "".join(c for c in data['artist_name'] if c.isalnum() or c in (' ', '-', '_')).strip()
@@ -227,16 +227,24 @@ class ArtistReportGenerator:
         styles = self._get_styles()
         width = A4[0] - 40*mm
         
-        # Добавляем секции
-        story.extend(self._add_header(data, period, styles))
-        story.extend(self._add_kpi_summary(data, styles, width))
-        story.extend(self._add_top_tracks(data, styles, width))
-        story.extend(self._add_platforms(data, styles, width))
-        story.extend(self._add_countries(data, styles, width))
+        # СТРАНИЦА 1: Заголовок и основная информация
+        story.extend(self._add_ozen_header(data, period, styles))
+        story.extend(self._add_greeting(data, styles))
+        story.extend(self._add_summary_info(data, period, styles))
+        story.extend(self._add_payment_summary(data, styles, width))
+        story.extend(self._add_footer(styles))
         
-        # Графики на новой странице
+        # СТРАНИЦА 2: Аналитика топ трека и платформ
         story.append(PageBreak())
-        story.extend(self._add_charts(data, styles, width))
+        story.extend(self._add_analytics_header(data, styles))
+        story.extend(self._add_top_track_analysis(data, styles, width))
+        story.extend(self._add_platforms_revenue_analysis(data, styles, width))
+        story.extend(self._add_top_tracks_table(data, styles, width))
+        
+        # СТРАНИЦА 3: Визуализация (опционально)
+        if len(data['platforms']['platforms']) > 0 and len(data['geography']['top_countries']) > 0:
+            story.append(PageBreak())
+            story.extend(self._add_charts(data, styles, width))
         
         # Строим PDF
         doc.build(story)
@@ -288,66 +296,214 @@ class ArtistReportGenerator:
         
         return styles
     
-    def _add_header(self, data: dict, period: str, styles):
-        """Добавляет заголовок отчета"""
+    def _add_ozen_header(self, data: dict, period: str, styles):
+        """Добавляет заголовок в стиле özen"""
         elements = []
         
-        title = Paragraph("КВАРТАЛЬНЫЙ ОТЧЁТ", styles['CustomTitle'])
+        # Логотип/название компании
+        title = Paragraph("<font size=18><b>özen</b></font>", styles['CustomTitle'])
         elements.append(title)
+        elements.append(Spacer(1, 5*mm))
         
-        subtitle = Paragraph(
-            f"<b>Артист:</b> {data['artist_name']}<br/>"
-            f"<b>Период:</b> {period}<br/>"
-            f"<b>Дата формирования:</b> {datetime.now().strftime('%d.%m.%Y')}",
+        # Реквизиты компании
+        company_info = Paragraph(
+            "<font size=8>"
+            "<b>БИН</b> 190440002324 | <b>ИИК</b> KZ5096503F0008550902 | <b>БИК</b> IRTYKZKA | АО \"ForteBank\" г.Астана<br/>"
+            "e-mail: ozenxo@gmail.com | г. Астана, ул. E-755, д. 1, офис 127"
+            "</font>",
             styles['ContactInfo']
         )
-        elements.append(subtitle)
+        elements.append(company_info)
         elements.append(Spacer(1, 10*mm))
         
-        # Контактная информация компании
-        contact_info = Paragraph(
-            "<b>БИН</b> 190440002324 | <b>ИИК</b> KZ5096503F0008550902 | <b>БИК</b> IRTYKZKA<br/>"
-            '<b>АО "ForteBank"</b> г. Астана<br/>'
-            "<b>E-mail:</b> ozenxo@gmail.com | <b>Адрес:</b> г. Астана, ул. Е-755, д. 1, офис 127",
-            styles['ContactInfo']
+        # Дата
+        date_text = Paragraph(
+            f"<font size=10>{datetime.now().strftime('%d %B %Y года')}</font>",
+            styles['Normal']
         )
-        elements.append(contact_info)
-        elements.append(Spacer(1, 10*mm))
+        elements.append(date_text)
+        elements.append(Spacer(1, 8*mm))
         
         return elements
     
-    def _add_kpi_summary(self, data: dict, styles, width):
-        """Добавляет KPI сводку"""
+    def _add_greeting(self, data: dict, styles):
+        """Добавляет приветствие"""
         elements = []
         
-        heading = Paragraph("КЛЮЧЕВЫЕ ПОКАЗАТЕЛИ", styles['CustomHeading2'])
-        elements.append(heading)
+        greeting = Paragraph(
+            f"<font size=11>Здравствуйте!</font>",
+            styles['Normal']
+        )
+        elements.append(greeting)
+        elements.append(Spacer(1, 6*mm))
         
-        kpi_data = [
-            ['Показатель', 'Значение'],
-            ['Общие стримы', self._format_number(data['overview']['total_streams'])],
-            ['Общий доход (Believe)', self._format_currency(data['overview']['total_revenue'])],
-            ['Заработок артиста (74.8%)', self._format_currency(data['overview']['artist_earnings'])],
-            ['Уникальных треков', str(data['overview']['unique_tracks'])],
-            ['Охват стран', str(data['overview']['unique_countries'])],
-            ['Количество платформ', str(data['overview']['unique_platforms'])],
-            ['Средняя цена за стрим', self._format_currency(data['financial']['avg_price_per_stream'])],
+        intro = Paragraph(
+            f"<font size=10>Вот общая сумма лицензионных отчислений за нижеперечисленные релизы "
+            f"с учетом комиссии за дистрибуцию, составляющую 20%</font>",
+            styles['Normal']
+        )
+        elements.append(intro)
+        elements.append(Spacer(1, 8*mm))
+        
+        return elements
+    
+    def _add_summary_info(self, data: dict, period: str, styles):
+        """Добавляет краткую информацию о каталоге"""
+        elements = []
+        
+        # Получаем список треков
+        tracks_list = ", ".join([t['track_name'] for t in data['tracks']['tracks'][:5]])
+        if len(data['tracks']['tracks']) > 5:
+            tracks_list += f" и ещё {len(data['tracks']['tracks']) - 5} треков"
+        
+        info = Paragraph(
+            f"<font size=10>"
+            f"<b>Артист:</b> {data['artist_name']}<br/><br/>"
+            f"<b>Релизы:</b> {tracks_list}<br/><br/>"
+            f"<b>Период:</b> {period}<br/>"
+            "</font>",
+            styles['Normal']
+        )
+        elements.append(info)
+        elements.append(Spacer(1, 8*mm))
+        
+        return elements
+    
+    def _add_payment_summary(self, data: dict, styles, width):
+        """Добавляет сводку по выплатам"""
+        elements = []
+        
+        overview = data['overview']
+        
+        # Конвертируем EUR в KZT (примерный курс 520 KZT за 1 EUR)
+        eur_to_kzt = 520
+        distribution_payment = overview['total_revenue'] * eur_to_kzt
+        copyright_payment = distribution_payment * 0.08  # Примерно 8% от дистрибуции
+        total_payment = distribution_payment + copyright_payment
+        
+        # Таблица выплат
+        payment_data = [
+            [Paragraph('<b>Выплата дистрибуция:</b>', styles['Normal']), 
+             Paragraph(f'<b>{distribution_payment:,.0f} тенге</b>'.replace(',', ' '), styles['Normal'])],
+            [Paragraph('<b>Выплата за авторские сборы:</b>', styles['Normal']), 
+             Paragraph(f'<b>{copyright_payment:,.0f} тенге</b>'.replace(',', ' '), styles['Normal'])],
+            ['', ''],
+            [Paragraph('<b><font size=12>Общая сумма к выплате:</font></b>', styles['Normal']), 
+             Paragraph(f'<b><font size=12>{total_payment:,.0f} тенге</font></b>'.replace(',', ' '), styles['Normal'])],
         ]
         
-        table = Table(kpi_data, colWidths=[width * 0.6, width * 0.4])
+        table = Table(payment_data, colWidths=[width * 0.6, width * 0.4])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E3192')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('FONTNAME', (0, 0), (-1, -1), FONT_NAME),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('LINEBELOW', (0, 3), (-1, 3), 2, colors.black),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        
+        elements.append(table)
+        elements.append(Spacer(1, 15*mm))
+        
+        return elements
+    
+    def _add_footer(self, styles):
+        """Добавляет подвал с подписью"""
+        elements = []
+        
+        signature = Paragraph(
+            "<font size=10>"
+            "С наилучшими пожеланиями,<br/>"
+            "сотрудник отдела лицензионных платежей<br/><br/>"
+            "<b>özen</b>"
+            "</font>",
+            styles['Normal']
+        )
+        elements.append(signature)
+        elements.append(Spacer(1, 5*mm))
+        
+        divider = Paragraph("_" * 80, styles['Footer'])
+        elements.append(divider)
+        
+        return elements
+    
+    def _add_analytics_header(self, data: dict, styles):
+        """Добавляет заголовок аналитической страницы"""
+        elements = []
+        
+        title = Paragraph(
+            f"<font size=16><b>Детальная аналитика: {data['artist_name']}</b></font>",
+            styles['CustomHeading2']
+        )
+        elements.append(title)
+        elements.append(Spacer(1, 8*mm))
+        
+        return elements
+    
+    def _add_top_track_analysis(self, data: dict, styles, width):
+        """Добавляет анализ самого популярного и прибыльного трека"""
+        elements = []
+        
+        heading = Paragraph("🎵 САМЫЙ ПОПУЛЯРНЫЙ И ПРИБЫЛЬНЫЙ ТРЕК", styles['CustomHeading2'])
+        elements.append(heading)
+        elements.append(Spacer(1, 5*mm))
+        
+        # Находим топ трек по стримам и по доходу
+        tracks = data['tracks']['tracks']
+        if not tracks:
+            return elements
+        
+        top_by_streams = max(tracks, key=lambda x: x['streams'])
+        top_by_revenue = max(tracks, key=lambda x: x['revenue'])
+        
+        # Данные для таблицы
+        track_data = [
+            ['Критерий', 'Название трека', 'Стримы', 'Доход (EUR)', '% от дохода'],
+        ]
+        
+        total_revenue = data['overview']['total_revenue']
+        
+        # Самый популярный (по стримам)
+        streams_pct = (top_by_streams['revenue'] / total_revenue * 100) if total_revenue > 0 else 0
+        track_data.append([
+            '🔥 По стримам',
+            top_by_streams['track_name'][:30],
+            self._format_number(top_by_streams['streams']),
+            self._format_currency(top_by_streams['revenue']),
+            f"{streams_pct:.1f}%"
+        ])
+        
+        # Самый прибыльный (по доходу) - только если это другой трек
+        if top_by_revenue['track_name'] != top_by_streams['track_name']:
+            revenue_pct = (top_by_revenue['revenue'] / total_revenue * 100) if total_revenue > 0 else 0
+            track_data.append([
+                '💰 По доходу',
+                top_by_revenue['track_name'][:30],
+                self._format_number(top_by_revenue['streams']),
+                self._format_currency(top_by_revenue['revenue']),
+                f"{revenue_pct:.1f}%"
+            ])
+        
+        table = Table(track_data, colWidths=[
+            width * 0.18,
+            width * 0.35,
+            width * 0.17,
+            width * 0.15,
+            width * 0.15
+        ])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4CAF50')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
             ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),
+            ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, 0), FONT_NAME_BOLD),
             ('FONTNAME', (0, 1), (-1, -1), FONT_NAME),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
             ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ('FONTSIZE', (0, 1), (-1, -1), 10),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.Color(0.95, 0.98, 0.95), colors.white]),
         ]))
         
         elements.append(table)
@@ -355,85 +511,133 @@ class ArtistReportGenerator:
         
         return elements
     
-    def _add_top_tracks(self, data: dict, styles, width):
-        """Добавляет топ треки"""
+    def _add_platforms_revenue_analysis(self, data: dict, styles, width):
+        """Добавляет анализ платформ по доходу"""
         elements = []
         
-        heading = Paragraph("ТОП ТРЕКИ", styles['CustomHeading2'])
+        heading = Paragraph("📱 ПЛАТФОРМЫ ПО ДОХОДУ", styles['CustomHeading2'])
         elements.append(heading)
+        elements.append(Spacer(1, 5*mm))
         
-        tracks_data = [['Трек', 'Стримы', 'Доход (EUR)', '% от дохода']]
+        platforms = data['platforms']['platforms']
+        if not platforms:
+            return elements
+        
+        # Данные для таблицы
+        platform_data = [
+            ['Место', 'Платформа', 'Стримы', 'Доход (EUR)', '% от дохода', '€/стрим'],
+        ]
         
         total_revenue = data['overview']['total_revenue']
-        for track in data['tracks']['tracks']:
+        
+        for idx, p in enumerate(platforms, 1):
+            percentage = (p['revenue'] / total_revenue * 100) if total_revenue > 0 else 0
+            
+            # Эмодзи для топ-3
+            emoji = ''
+            if idx == 1:
+                emoji = '🥇 '
+            elif idx == 2:
+                emoji = '🥈 '
+            elif idx == 3:
+                emoji = '🥉 '
+            
+            platform_data.append([
+                f'{emoji}{idx}',
+                p['platform'][:25],
+                self._format_number(p['streams']),
+                self._format_currency(p['revenue']),
+                f"{percentage:.1f}%",
+                f"€{p['avg_price_per_stream']:.4f}"
+            ])
+        
+        table = Table(platform_data, colWidths=[
+            width * 0.12,
+            width * 0.30,
+            width * 0.18,
+            width * 0.16,
+            width * 0.12,
+            width * 0.12
+        ])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2196F3')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+            ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
+            ('FONTNAME', (0, 0), (-1, 0), FONT_NAME_BOLD),
+            ('FONTNAME', (0, 1), (-1, -1), FONT_NAME),
+            ('FONTSIZE', (0, 0), (-1, 0), 10),
+            ('FONTSIZE', (0, 1), (-1, -1), 9),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.Color(0.93, 0.96, 0.99), colors.white]),
+        ]))
+        
+        elements.append(table)
+        elements.append(Spacer(1, 8*mm))
+        
+        # Добавляем краткий вывод
+        top_platform = platforms[0]
+        conclusion = Paragraph(
+            f"<font size=10>"
+            f"<b>💡 Вывод:</b> Основной доход ({top_platform['percentage']:.1f}%) приходит с платформы "
+            f"<b>{top_platform['platform']}</b> ({self._format_currency(top_platform['revenue'])})."
+            "</font>",
+            styles['Normal']
+        )
+        elements.append(conclusion)
+        elements.append(Spacer(1, 8*mm))
+        
+        return elements
+    
+    def _add_top_tracks_table(self, data: dict, styles, width):
+        """Добавляет таблицу всех топ треков"""
+        elements = []
+        
+        heading = Paragraph("🎼 ВСЕ ТРЕКИ В КАТАЛОГЕ", styles['CustomHeading2'])
+        elements.append(heading)
+        elements.append(Spacer(1, 5*mm))
+        
+        tracks = data['tracks']['tracks']
+        if not tracks:
+            return elements
+        
+        # Данные для таблицы
+        tracks_data = [['№', 'Название трека', 'Стримы', 'Доход (EUR)', '% дохода']]
+        
+        total_revenue = data['overview']['total_revenue']
+        
+        for idx, track in enumerate(tracks[:15], 1):  # Показываем максимум 15 треков
             percentage = (track['revenue'] / total_revenue * 100) if total_revenue > 0 else 0
             tracks_data.append([
-                track['track_name'][:30],
+                str(idx),
+                track['track_name'][:35],
                 self._format_number(track['streams']),
                 self._format_currency(track['revenue']),
                 f"{percentage:.1f}%"
             ])
         
         table = Table(tracks_data, colWidths=[
-            width * 0.4,
-            width * 0.2,
-            width * 0.2,
-            width * 0.2
+            width * 0.08,
+            width * 0.44,
+            width * 0.18,
+            width * 0.16,
+            width * 0.14
         ])
         table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E3192')),
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#9C27B0')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
+            ('ALIGN', (0, 0), (0, -1), 'CENTER'),
+            ('ALIGN', (1, 0), (1, -1), 'LEFT'),
+            ('ALIGN', (2, 0), (-1, -1), 'RIGHT'),
             ('FONTNAME', (0, 0), (-1, 0), FONT_NAME_BOLD),
             ('FONTNAME', (0, 1), (-1, -1), FONT_NAME),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
-        
-        elements.append(table)
-        elements.append(Spacer(1, 8*mm))
-        
-        return elements
-    
-    def _add_platforms(self, data: dict, styles, width):
-        """Добавляет анализ платформ"""
-        elements = []
-        
-        heading = Paragraph("АНАЛИЗ ПЛАТФОРМ (Топ-5)", styles['CustomHeading2'])
-        elements.append(heading)
-        
-        platforms_data = [['Платформа', 'Стримы', 'Доход', '€/стрим']]
-        
-        for p in data['platforms']['platforms']:
-            platforms_data.append([
-                p['platform'][:25],
-                self._format_number(p['streams']),
-                self._format_currency(p['revenue']),
-                f"€{p['avg_price_per_stream']:.4f}"
-            ])
-        
-        table = Table(platforms_data, colWidths=[
-            width * 0.4,
-            width * 0.2,
-            width * 0.2,
-            width * 0.2
-        ])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E3192')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), FONT_NAME_BOLD),
-            ('FONTNAME', (0, 1), (-1, -1), FONT_NAME),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
             ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
+            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.Color(0.97, 0.95, 0.98)]),
         ]))
         
         elements.append(table)
@@ -441,50 +645,6 @@ class ArtistReportGenerator:
         
         return elements
     
-    def _add_countries(self, data: dict, styles, width):
-        """Добавляет географию"""
-        elements = []
-        
-        if not data['geography']['top_countries']:
-            return elements
-        
-        heading = Paragraph("ГЕОГРАФИЯ (Топ-10 стран)", styles['CustomHeading2'])
-        elements.append(heading)
-        
-        countries_data = [['Страна', 'Стримы', 'Доход (EUR)', '% стримов']]
-        
-        for country in data['geography']['top_countries']:
-            countries_data.append([
-                country['country'][:20],
-                self._format_number(country['streams']),
-                self._format_currency(country['revenue']),
-                f"{country['percentage']:.1f}%"
-            ])
-        
-        table = Table(countries_data, colWidths=[
-            width * 0.35,
-            width * 0.25,
-            width * 0.2,
-            width * 0.2
-        ])
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#2E3192')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
-            ('ALIGN', (1, 0), (-1, -1), 'RIGHT'),
-            ('FONTNAME', (0, 0), (-1, 0), FONT_NAME_BOLD),
-            ('FONTNAME', (0, 1), (-1, -1), FONT_NAME),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('BOTTOMPADDING', (0, 0), (-1, 0), 10),
-            ('GRID', (0, 0), (-1, -1), 1, colors.grey),
-            ('FONTSIZE', (0, 1), (-1, -1), 8),
-            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.lightgrey]),
-        ]))
-        
-        elements.append(table)
-        elements.append(Spacer(1, 8*mm))
-        
-        return elements
     
     def _add_charts(self, data: dict, styles, width):
         """Добавляет графики"""

@@ -113,3 +113,129 @@ class GenerateArtistReportTool(BaseTool):
                 "message": f"❌ Критическая ошибка при создании отчета: {str(e)}"
             }
 
+
+class GenerateDocxReportTool(BaseTool):
+    """Generate a report based on DOCX template"""
+    
+    def __init__(self):
+        self.analytics = AnalyticsService()
+    
+    @property
+    def name(self) -> str:
+        return "generate_docx_report"
+    
+    @property
+    def description(self) -> str:
+        return """Создать отчет на основе DOCX шаблона. 
+        Поддерживает кастомные шаблоны и указание курса валют.
+        Используй этот инструмент когда пользователь просит:
+        - 'Сделай DOCX отчет для артиста X'
+        - 'Создай отчет по шаблону для X'
+        - 'Отчет с курсом валют для X'
+        Поддерживает форматы: DOCX и PDF"""
+    
+    @property
+    def parameters(self) -> List[ToolParameter]:
+        return [
+            ToolParameter(
+                name="artist_name",
+                type="string",
+                description="Имя артиста",
+                required=True
+            ),
+            ToolParameter(
+                name="period",
+                type="string",
+                description="Период отчета",
+                required=False,
+                default="Q4 2025"
+            ),
+            ToolParameter(
+                name="template_name",
+                type="string",
+                description="Имя файла шаблона DOCX (если не указан - создается базовый)",
+                required=False,
+                default=None
+            ),
+            ToolParameter(
+                name="eur_to_kzt_rate",
+                type="number",
+                description="Курс EUR → KZT (по умолчанию 520)",
+                required=False,
+                default=520.0
+            ),
+            ToolParameter(
+                name="output_format",
+                type="string",
+                description="Формат вывода: 'docx' или 'pdf'",
+                required=False,
+                default="docx"
+            )
+        ]
+    
+    def execute(
+        self, 
+        artist_name: str, 
+        period: str = "Q4 2025",
+        template_name: str = None,
+        eur_to_kzt_rate: float = 520.0,
+        output_format: str = "docx",
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Execute DOCX report generation"""
+        
+        logger.info(f"📄 Генерация DOCX отчета для артиста: {artist_name}")
+        logger.info(f"   Период: {period}")
+        logger.info(f"   Шаблон: {template_name or 'базовый'}")
+        logger.info(f"   Курс: {eur_to_kzt_rate} ₸/€")
+        logger.info(f"   Формат: {output_format}")
+        
+        try:
+            from app.utils.docx_report_generator import DocxReportGenerator
+            
+            generator = DocxReportGenerator(self.analytics)
+            
+            result = generator.generate_report(
+                artist_name=artist_name,
+                period=period,
+                template_name=template_name,
+                eur_to_kzt_rate=eur_to_kzt_rate,
+                output_format=output_format
+            )
+            
+            if result['success']:
+                logger.info(f"✅ DOCX отчет создан: {result['file_path']}")
+                
+                file_name = os.path.basename(result['file_path'])
+                download_url = f"/reports/download/{file_name}"
+                
+                return {
+                    "success": True,
+                    "artist_name": result['artist_name'],
+                    "file_path": result['file_path'],
+                    "file_name": file_name,
+                    "download_url": download_url,
+                    "format": result['format'],
+                    "summary": result['summary'],
+                    "message": f"✅ **{result['format'].upper()}-отчет успешно создан для артиста {result['artist_name']}**\n\n"
+                              f"📥 **Скачать отчет:** [Скачать {result['format'].upper()}]({download_url})\n"
+                              f"📄 **Файл:** `{file_name}`\n"
+                              f"💱 **Курс:** {eur_to_kzt_rate} ₸/€\n\n"
+                              f"{result['summary']}"
+                }
+            else:
+                logger.error(f"❌ Ошибка генерации: {result['error']}")
+                return {
+                    "success": False,
+                    "error": result['error'],
+                    "message": f"❌ Не удалось создать отчет: {result['error']}"
+                }
+                
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка: {str(e)}")
+            return {
+                "success": False,
+                "error": str(e),
+                "message": f"❌ Критическая ошибка: {str(e)}"
+            }
+

@@ -74,6 +74,7 @@ class ArtistHelper:
         # Маппинг периодов на файлы
         period_files = {
             "q3_2025": "1740260_704133_2025-07-01_2025-09-01.csv",
+            "q4_2025": "1855874_704133_2025-10-01_2025-12-01.csv",  # Актуальный файл Q4 2025
             "q4_2025_oct": "1787646_704133_2025-10-01_2025-10-01 2.csv",
             "q4_2025_nov": "1821306_704133_2025-11-01_2025-11-01.csv",
         }
@@ -89,20 +90,6 @@ class ArtistHelper:
             
             if not dfs:
                 raise HTTPException(status_code=404, detail="Данные не найдены")
-            
-            return pd.concat(dfs, ignore_index=True)
-        
-        elif period == "q4_2025":
-            # Загружаем октябрь и ноябрь
-            dfs = []
-            for key in ["q4_2025_oct", "q4_2025_nov"]:
-                file_path = data_dir / period_files[key]
-                if file_path.exists():
-                    df = pd.read_csv(file_path, sep=';', encoding='utf-8', quotechar='"', low_memory=False)
-                    dfs.append(df)
-            
-            if not dfs:
-                raise HTTPException(status_code=404, detail="Данные за Q4 2025 не найдены")
             
             return pd.concat(dfs, ignore_index=True)
         
