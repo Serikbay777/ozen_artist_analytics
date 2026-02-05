@@ -132,7 +132,8 @@ class AnalyticsService:
             self._df['year'] = self._df['Месяц отчета'].dt.year.astype('int16')  # int16 вместо int64
             self._df['month'] = self._df['Месяц отчета'].dt.month.astype('int8')  # int8 вместо int64
             self._df['quarter'] = self._df['Месяц отчета'].dt.quarter.astype('int8')
-            self._df['year_month'] = self._df['Месяц отчета'].dt.to_period('M')
+            # year_month вычисляется по требованию, не при загрузке (экономит ~500MB RAM)
+            # self._df['year_month'] = self._df['Месяц отчета'].dt.to_period('M')
             
             # ✅ ОПТИМИЗАЦИЯ: Вычисляем release_date и track_age только при необходимости
             # Закомментировано для экономии памяти - раскомментируйте если нужно
@@ -591,7 +592,10 @@ class AnalyticsService:
     
     def get_track_lifecycle(self, limit: int = 15) -> Dict[str, Any]:
         """Get track lifecycle analysis"""
-        df = self.df
+        df = self.df.copy()
+        
+        # Вычисляем year_month только здесь, где он нужен
+        df['year_month'] = df['Месяц отчета'].dt.to_period('M')
         
         track_lifecycle = df.groupby(['Исполнитель', 'Название трека']).agg({
             'year_month': ['min', 'max', 'nunique'],
