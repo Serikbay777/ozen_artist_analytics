@@ -1,68 +1,66 @@
 """
 Инструменты для аналитики артистов
 Используются AI агентом для получения данных о стримах, демографии и DSP
+SQLite версия для оптимизации памяти
 """
 
 import pandas as pd
+import sqlite3
+import os
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 import json
 
 
 class ArtistAnalyticsTools:
-    """Набор инструментов для аналитики артистов"""
+    """Набор инструментов для аналитики артистов (SQLite версия)"""
     
-    def __init__(self, data_dir: str = "data/processed"):
+    def __init__(self, db_path: str = None):
         """
         Инициализация инструментов
         
         Args:
-            data_dir: Путь к директории с данными
+            db_path: Путь к SQLite базе данных
         """
-        self.data_dir = Path(data_dir)
-        self.period_files = {
-            "q3_2025": "1740260_704133_2025-07-01_2025-09-01.csv",
-            "q4_2025": "1855874_704133_2025-10-01_2025-12-01.csv",  # Актуальный файл Q4 2025
-            "q4_2025_oct": "1787646_704133_2025-10-01_2025-10-01 2.csv",
-            "q4_2025_nov": "1821306_704133_2025-11-01_2025-11-01.csv",
-        }
-    
-    def _load_data(self, period: str = "q3_2025") -> pd.DataFrame:
-        """Загрузка данных за период"""
-        if period == "all":
-            dfs = []
-            for file_name in self.period_files.values():
-                file_path = self.data_dir / file_name
-                if file_path.exists():
-                    df = pd.read_csv(file_path, sep=';', encoding='utf-8', quotechar='"', low_memory=False)
-                    dfs.append(df)
-            return pd.concat(dfs, ignore_index=True) if dfs else pd.DataFrame()
+        if db_path is None:
+            base_dir = Path(__file__).parent.parent.parent
+            db_path = str(base_dir / 'data' / 'analytics.db')
         
-        else:
-            # Проверяем, есть ли период в маппинге
-            if period not in self.period_files:
-                return pd.DataFrame()
-            
-            file_path = self.data_dir / self.period_files[period]
-            if not file_path.exists():
-                return pd.DataFrame()
-            
-            return pd.read_csv(file_path, sep=';', encoding='utf-8', quotechar='"', low_memory=False)
+        self.db_path = db_path
+        if not os.path.exists(self.db_path):
+            raise FileNotFoundError(f"SQLite database not found at {self.db_path}. Please run scripts/csv_to_sqlite.py first.")
+        
+        self.conn = sqlite3.connect(self.db_path)
+        print(f"✅ ArtistAnalyticsTools initialized with SQLite from {self.db_path}")
     
-    def _clean_numeric(self, df: pd.DataFrame, column: str) -> pd.Series:
-        """Очистка числовых колонок"""
-        if column not in df.columns:
-            return pd.Series([0] * len(df))
-        return df[column].astype(str).str.replace(',', '.').astype(float)
-    
-    def _get_artist_data(self, df: pd.DataFrame, artist_name: str) -> pd.DataFrame:
-        """Получение данных по артисту"""
-        artist_col = 'Исполнитель' if 'Исполнитель' in df.columns else 'Artist'
-        return df[df[artist_col].str.lower() == artist_name.lower()]
-    
-    def search_artists(self, query: str, period: str = "q3_2025", limit: int = 20) -> Dict[str, Any]:
+    def _load_data(self, period: str = "all", artist_name: str = None) -> pd.DataFrame:
         """
-        Поиск артистов по имени
+        Загрузка данных за период из SQLite
+        
+        Args:
+            period: Период данных (q3_2025, q4_2025, all)
+            artist_name: Имя артиста для фильтрации (опционально)
+        """
+        query = "SELECT * FROM analytics WHERE 1=1"
+        params = []
+        
+        # Фильтр по периоду
+        if period == "q3_2025":
+            query += " AND year = 2025 AND quarter = 3"
+        elif period == "q4_2025":
+            query += " AND year = 2025 AND quarter = 4"
+        # period == "all" - без фильтра
+        
+        # Фильтр по артисту
+        if artist_name:
+            query += " AND LOWER(Исполнитель) = LOWER(?)"
+            params.append(artist_name)
+        
+        return pd.read_sql(query, self.conn, params=params if params else None)
+    
+    def search_artists(self, query: str, period: str = "all", limit: int = 20) -> Dict[str, Any]:
+        """
+        Поиск артистов по имени (SQLite версия)
         
         Args:
             query: Поисковый запрос (минимум 2 символа)
@@ -73,26 +71,36 @@ class ArtistAnalyticsTools:
             Словарь с найденными артистами
         """
         try:
-            df = self._load_data(period)
-            if df.empty:
-                return {"error": "Данные не найдены", "artists": []}
+            sql_query = """
+                SELECT DISTINCT Исполнитель
+                FROM analytics
+                WHERE LOWER(Исполнитель) LIKE LOWER(?)
+            """
+            params = [f"%{query}%"]
             
-            artist_col = 'Исполнитель' if 'Исполнитель' in df.columns else 'Artist'
-            matching_artists = df[df[artist_col].str.contains(query, case=False, na=False)][artist_col].unique()
-            matching_artists = matching_artists[:limit]
+            # Фильтр по периоду
+            if period == "q3_2025":
+                sql_query += " AND year = 2025 AND quarter = 3"
+            elif period == "q4_2025":
+                sql_query += " AND year = 2025 AND quarter = 4"
+            
+            sql_query += f" LIMIT {limit}"
+            
+            df = pd.read_sql(sql_query, self.conn, params=params)
+            artists = df['Исполнитель'].tolist() if not df.empty else []
             
             return {
                 "query": query,
                 "period": period,
-                "count": len(matching_artists),
-                "artists": matching_artists.tolist()
+                "count": len(artists),
+                "artists": artists
             }
         except Exception as e:
             return {"error": str(e), "artists": []}
     
-    def get_artist_streams(self, artist_name: str, period: str = "q3_2025") -> Dict[str, Any]:
+    def get_artist_streams(self, artist_name: str, period: str = "all") -> Dict[str, Any]:
         """
-        Получить статистику стримов артиста
+        Получить статистику стримов артиста (SQLite версия)
         
         Args:
             artist_name: Имя артиста
@@ -102,22 +110,28 @@ class ArtistAnalyticsTools:
             Словарь со статистикой стримов
         """
         try:
-            df = self._load_data(period)
-            if df.empty:
-                return {"error": "Данные не найдены"}
+            sql_query = """
+                SELECT 
+                    SUM(Количество) as total_streams,
+                    SUM("Сумма вознаграждения") as total_revenue
+                FROM analytics
+                WHERE LOWER(Исполнитель) = LOWER(?)
+            """
+            params = [artist_name]
             
-            artist_df = self._get_artist_data(df, artist_name)
-            if artist_df.empty:
+            # Фильтр по периоду
+            if period == "q3_2025":
+                sql_query += " AND year = 2025 AND quarter = 3"
+            elif period == "q4_2025":
+                sql_query += " AND year = 2025 AND quarter = 4"
+            
+            df = pd.read_sql(sql_query, self.conn, params=params)
+            
+            if df.empty or df['total_streams'].iloc[0] is None:
                 return {"error": f"Артист '{artist_name}' не найден"}
             
-            revenue_col = 'Сумма вознаграждения' if 'Сумма вознаграждения' in df.columns else 'Revenue'
-            quantity_col = 'Количество' if 'Количество' in df.columns else 'Quantity'
-            
-            artist_df['revenue_clean'] = self._clean_numeric(artist_df, revenue_col)
-            artist_df['quantity_clean'] = self._clean_numeric(artist_df, quantity_col)
-            
-            total_streams = int(artist_df['quantity_clean'].sum())
-            total_revenue = round(artist_df['revenue_clean'].sum(), 2)
+            total_streams = int(df['total_streams'].iloc[0])
+            total_revenue = round(float(df['total_revenue'].iloc[0]), 2)
             avg_per_stream = round(total_revenue / total_streams, 6) if total_streams > 0 else 0
             
             return {
@@ -131,9 +145,9 @@ class ArtistAnalyticsTools:
         except Exception as e:
             return {"error": str(e)}
     
-    def get_artist_platforms(self, artist_name: str, period: str = "q3_2025", top_n: int = 10) -> Dict[str, Any]:
+    def get_artist_platforms(self, artist_name: str, period: str = "all", top_n: int = 10) -> Dict[str, Any]:
         """
-        Получить статистику по DSP платформам артиста
+        Получить статистику по DSP платформам артиста (SQLite версия)
         
         Args:
             artist_name: Имя артиста
@@ -144,50 +158,65 @@ class ArtistAnalyticsTools:
             Словарь со статистикой по платформам
         """
         try:
-            df = self._load_data(period)
-            if df.empty:
-                return {"error": "Данные не найдены"}
+            sql_query = """
+                SELECT 
+                    Платформа as platform,
+                    SUM(Количество) as streams,
+                    SUM("Сумма вознаграждения") as revenue
+                FROM analytics
+                WHERE LOWER(Исполнитель) = LOWER(?)
+            """
+            params = [artist_name]
             
-            artist_df = self._get_artist_data(df, artist_name)
-            if artist_df.empty:
+            # Фильтр по периоду
+            if period == "q3_2025":
+                sql_query += " AND year = 2025 AND quarter = 3"
+            elif period == "q4_2025":
+                sql_query += " AND year = 2025 AND quarter = 4"
+            
+            sql_query += f"""
+                GROUP BY Платформа
+                ORDER BY revenue DESC
+                LIMIT {top_n}
+            """
+            
+            df = pd.read_sql(sql_query, self.conn, params=params)
+            
+            if df.empty:
                 return {"error": f"Артист '{artist_name}' не найден"}
             
-            platform_col = 'Платформа' if 'Платформа' in df.columns else 'Platform'
-            revenue_col = 'Сумма вознаграждения' if 'Сумма вознаграждения' in df.columns else 'Revenue'
-            quantity_col = 'Количество' if 'Количество' in df.columns else 'Quantity'
-            
-            artist_df['revenue_clean'] = self._clean_numeric(artist_df, revenue_col)
-            artist_df['quantity_clean'] = self._clean_numeric(artist_df, quantity_col)
-            
-            platform_stats = artist_df.groupby(platform_col).agg({
-                'quantity_clean': 'sum',
-                'revenue_clean': 'sum'
-            }).round(2)
-            
-            platform_stats = platform_stats.sort_values('revenue_clean', ascending=False).head(top_n)
-            total_revenue = artist_df['revenue_clean'].sum()
+            total_revenue = df['revenue'].sum()
             
             platforms = []
-            for platform, row in platform_stats.iterrows():
+            for _, row in df.iterrows():
                 platforms.append({
-                    "platform": platform,
-                    "streams": int(row['quantity_clean']),
-                    "revenue": float(row['revenue_clean']),
-                    "percentage": round((row['revenue_clean'] / total_revenue * 100), 2) if total_revenue > 0 else 0
+                    "platform": row['platform'],
+                    "streams": int(row['streams']),
+                    "revenue": float(row['revenue']),
+                    "percentage": round((row['revenue'] / total_revenue * 100), 2) if total_revenue > 0 else 0
                 })
+            
+            # Получаем общее количество платформ
+            total_platforms_query = """
+                SELECT COUNT(DISTINCT Платформа) as count
+                FROM analytics
+                WHERE LOWER(Исполнитель) = LOWER(?)
+            """
+            total_df = pd.read_sql(total_platforms_query, self.conn, params=[artist_name])
+            total_platforms = int(total_df['count'].iloc[0]) if not total_df.empty else 0
             
             return {
                 "artist": artist_name,
                 "period": period,
-                "total_platforms": len(artist_df[platform_col].unique()),
+                "total_platforms": total_platforms,
                 "top_platforms": platforms
             }
         except Exception as e:
             return {"error": str(e)}
     
-    def get_artist_geography(self, artist_name: str, period: str = "q3_2025", top_n: int = 15) -> Dict[str, Any]:
+    def get_artist_geography(self, artist_name: str, period: str = "all", top_n: int = 15) -> Dict[str, Any]:
         """
-        Получить географическую статистику артиста (демографию)
+        Получить географическую статистику артиста (SQLite версия)
         
         Args:
             artist_name: Имя артиста
@@ -198,50 +227,65 @@ class ArtistAnalyticsTools:
             Словарь с географической статистикой
         """
         try:
-            df = self._load_data(period)
-            if df.empty:
-                return {"error": "Данные не найдены"}
+            sql_query = """
+                SELECT 
+                    "страна / регион" as country,
+                    SUM(Количество) as streams,
+                    SUM("Сумма вознаграждения") as revenue
+                FROM analytics
+                WHERE LOWER(Исполнитель) = LOWER(?)
+            """
+            params = [artist_name]
             
-            artist_df = self._get_artist_data(df, artist_name)
-            if artist_df.empty:
+            # Фильтр по периоду
+            if period == "q3_2025":
+                sql_query += " AND year = 2025 AND quarter = 3"
+            elif period == "q4_2025":
+                sql_query += " AND year = 2025 AND quarter = 4"
+            
+            sql_query += f"""
+                GROUP BY "страна / регион"
+                ORDER BY revenue DESC
+                LIMIT {top_n}
+            """
+            
+            df = pd.read_sql(sql_query, self.conn, params=params)
+            
+            if df.empty:
                 return {"error": f"Артист '{artist_name}' не найден"}
             
-            country_col = 'страна / регион' if 'страна / регион' in df.columns else 'Country'
-            revenue_col = 'Сумма вознаграждения' if 'Сумма вознаграждения' in df.columns else 'Revenue'
-            quantity_col = 'Количество' if 'Количество' in df.columns else 'Quantity'
-            
-            artist_df['revenue_clean'] = self._clean_numeric(artist_df, revenue_col)
-            artist_df['quantity_clean'] = self._clean_numeric(artist_df, quantity_col)
-            
-            country_stats = artist_df.groupby(country_col).agg({
-                'quantity_clean': 'sum',
-                'revenue_clean': 'sum'
-            }).round(2)
-            
-            country_stats = country_stats.sort_values('revenue_clean', ascending=False).head(top_n)
-            total_revenue = artist_df['revenue_clean'].sum()
+            total_revenue = df['revenue'].sum()
             
             countries = []
-            for country, row in country_stats.iterrows():
+            for _, row in df.iterrows():
                 countries.append({
-                    "country": country,
-                    "streams": int(row['quantity_clean']),
-                    "revenue": float(row['revenue_clean']),
-                    "percentage": round((row['revenue_clean'] / total_revenue * 100), 2) if total_revenue > 0 else 0
+                    "country": row['country'],
+                    "streams": int(row['streams']),
+                    "revenue": float(row['revenue']),
+                    "percentage": round((row['revenue'] / total_revenue * 100), 2) if total_revenue > 0 else 0
                 })
+            
+            # Получаем общее количество стран
+            total_countries_query = """
+                SELECT COUNT(DISTINCT "страна / регион") as count
+                FROM analytics
+                WHERE LOWER(Исполнитель) = LOWER(?)
+            """
+            total_df = pd.read_sql(total_countries_query, self.conn, params=[artist_name])
+            total_countries = int(total_df['count'].iloc[0]) if not total_df.empty else 0
             
             return {
                 "artist": artist_name,
                 "period": period,
-                "total_countries": len(artist_df[country_col].unique()),
+                "total_countries": total_countries,
                 "top_countries": countries
             }
         except Exception as e:
             return {"error": str(e)}
     
-    def get_artist_tracks(self, artist_name: str, period: str = "q3_2025", top_n: int = 10) -> Dict[str, Any]:
+    def get_artist_tracks(self, artist_name: str, period: str = "all", top_n: int = 10) -> Dict[str, Any]:
         """
-        Получить статистику по трекам артиста
+        Получить статистику по трекам артиста (SQLite версия)
         
         Args:
             artist_name: Имя артиста
@@ -252,50 +296,65 @@ class ArtistAnalyticsTools:
             Словарь со статистикой по трекам
         """
         try:
-            df = self._load_data(period)
-            if df.empty:
-                return {"error": "Данные не найдены"}
+            sql_query = """
+                SELECT 
+                    "Название трека" as track_name,
+                    SUM(Количество) as streams,
+                    SUM("Сумма вознаграждения") as revenue
+                FROM analytics
+                WHERE LOWER(Исполнитель) = LOWER(?)
+            """
+            params = [artist_name]
             
-            artist_df = self._get_artist_data(df, artist_name)
-            if artist_df.empty:
+            # Фильтр по периоду
+            if period == "q3_2025":
+                sql_query += " AND year = 2025 AND quarter = 3"
+            elif period == "q4_2025":
+                sql_query += " AND year = 2025 AND quarter = 4"
+            
+            sql_query += f"""
+                GROUP BY "Название трека"
+                ORDER BY revenue DESC
+                LIMIT {top_n}
+            """
+            
+            df = pd.read_sql(sql_query, self.conn, params=params)
+            
+            if df.empty:
                 return {"error": f"Артист '{artist_name}' не найден"}
             
-            track_col = 'Название трека' if 'Название трека' in df.columns else 'Track Name'
-            revenue_col = 'Сумма вознаграждения' if 'Сумма вознаграждения' in df.columns else 'Revenue'
-            quantity_col = 'Количество' if 'Количество' in df.columns else 'Quantity'
-            
-            artist_df['revenue_clean'] = self._clean_numeric(artist_df, revenue_col)
-            artist_df['quantity_clean'] = self._clean_numeric(artist_df, quantity_col)
-            
-            track_stats = artist_df.groupby(track_col).agg({
-                'quantity_clean': 'sum',
-                'revenue_clean': 'sum'
-            }).round(2)
-            
-            track_stats = track_stats.sort_values('revenue_clean', ascending=False).head(top_n)
-            total_revenue = artist_df['revenue_clean'].sum()
+            total_revenue = df['revenue'].sum()
             
             tracks = []
-            for track, row in track_stats.iterrows():
+            for _, row in df.iterrows():
                 tracks.append({
-                    "track_name": track,
-                    "streams": int(row['quantity_clean']),
-                    "revenue": float(row['revenue_clean']),
-                    "percentage": round((row['revenue_clean'] / total_revenue * 100), 2) if total_revenue > 0 else 0
+                    "track_name": row['track_name'],
+                    "streams": int(row['streams']),
+                    "revenue": float(row['revenue']),
+                    "percentage": round((row['revenue'] / total_revenue * 100), 2) if total_revenue > 0 else 0
                 })
+            
+            # Получаем общее количество треков
+            total_tracks_query = """
+                SELECT COUNT(DISTINCT "Название трека") as count
+                FROM analytics
+                WHERE LOWER(Исполнитель) = LOWER(?)
+            """
+            total_df = pd.read_sql(total_tracks_query, self.conn, params=[artist_name])
+            total_tracks = int(total_df['count'].iloc[0]) if not total_df.empty else 0
             
             return {
                 "artist": artist_name,
                 "period": period,
-                "total_tracks": len(artist_df[track_col].unique()),
+                "total_tracks": total_tracks,
                 "top_tracks": tracks
             }
         except Exception as e:
             return {"error": str(e)}
     
-    def get_artist_full_analytics(self, artist_name: str, period: str = "q3_2025", top_n: int = 10) -> Dict[str, Any]:
+    def get_artist_full_analytics(self, artist_name: str, period: str = "all", top_n: int = 10) -> Dict[str, Any]:
         """
-        Получить полную аналитику по артисту
+        Получить полную аналитику по артисту (SQLite версия)
         
         Args:
             artist_name: Имя артиста
@@ -306,87 +365,25 @@ class ArtistAnalyticsTools:
             Словарь с полной аналитикой
         """
         try:
-            df = self._load_data(period)
-            if df.empty:
-                return {"error": "Данные не найдены"}
+            # Просто вызываем отдельные методы и собираем результаты
+            streams_data = self.get_artist_streams(artist_name, period)
+            if "error" in streams_data:
+                return streams_data
             
-            artist_df = self._get_artist_data(df, artist_name)
-            if artist_df.empty:
-                return {"error": f"Артист '{artist_name}' не найден"}
-            
-            # Колонки
-            platform_col = 'Платформа' if 'Платформа' in df.columns else 'Platform'
-            country_col = 'страна / регион' if 'страна / регион' in df.columns else 'Country'
-            track_col = 'Название трека' if 'Название трека' in df.columns else 'Track Name'
-            revenue_col = 'Сумма вознаграждения' if 'Сумма вознаграждения' in df.columns else 'Revenue'
-            quantity_col = 'Количество' if 'Количество' in df.columns else 'Quantity'
-            
-            # Очищаем числовые колонки
-            artist_df['revenue_clean'] = self._clean_numeric(artist_df, revenue_col)
-            artist_df['quantity_clean'] = self._clean_numeric(artist_df, quantity_col)
-            
-            total_streams = int(artist_df['quantity_clean'].sum())
-            total_revenue = round(artist_df['revenue_clean'].sum(), 2)
-            total_tracks = len(artist_df[track_col].unique())
-            
-            # Топ платформы
-            platform_stats = artist_df.groupby(platform_col).agg({
-                'quantity_clean': 'sum',
-                'revenue_clean': 'sum'
-            }).sort_values('revenue_clean', ascending=False).head(top_n)
-            
-            top_platforms = [
-                {
-                    "platform": platform,
-                    "streams": int(row['quantity_clean']),
-                    "revenue": float(row['revenue_clean']),
-                    "percentage": round((row['revenue_clean'] / total_revenue * 100), 2)
-                }
-                for platform, row in platform_stats.iterrows()
-            ]
-            
-            # Топ страны
-            country_stats = artist_df.groupby(country_col).agg({
-                'quantity_clean': 'sum',
-                'revenue_clean': 'sum'
-            }).sort_values('revenue_clean', ascending=False).head(top_n)
-            
-            top_countries = [
-                {
-                    "country": country,
-                    "streams": int(row['quantity_clean']),
-                    "revenue": float(row['revenue_clean']),
-                    "percentage": round((row['revenue_clean'] / total_revenue * 100), 2)
-                }
-                for country, row in country_stats.iterrows()
-            ]
-            
-            # Топ треки
-            track_stats = artist_df.groupby(track_col).agg({
-                'quantity_clean': 'sum',
-                'revenue_clean': 'sum'
-            }).sort_values('revenue_clean', ascending=False).head(top_n)
-            
-            top_tracks = [
-                {
-                    "track_name": track,
-                    "streams": int(row['quantity_clean']),
-                    "revenue": float(row['revenue_clean']),
-                    "percentage": round((row['revenue_clean'] / total_revenue * 100), 2)
-                }
-                for track, row in track_stats.iterrows()
-            ]
+            platforms_data = self.get_artist_platforms(artist_name, period, top_n)
+            countries_data = self.get_artist_geography(artist_name, period, top_n)
+            tracks_data = self.get_artist_tracks(artist_name, period, top_n)
             
             return {
                 "artist_name": artist_name,
                 "period": period,
-                "total_streams": total_streams,
-                "total_revenue": total_revenue,
-                "total_tracks": total_tracks,
+                "total_streams": streams_data["total_streams"],
+                "total_revenue": streams_data["total_revenue"],
+                "total_tracks": tracks_data.get("total_tracks", 0),
                 "currency": "EUR",
-                "top_platforms": top_platforms,
-                "top_countries": top_countries,
-                "top_tracks": top_tracks
+                "top_platforms": platforms_data.get("top_platforms", []),
+                "top_countries": countries_data.get("top_countries", []),
+                "top_tracks": tracks_data.get("top_tracks", [])
             }
         except Exception as e:
             return {"error": str(e)}
