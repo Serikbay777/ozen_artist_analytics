@@ -3,5 +3,7 @@ FAQ Agents - специализированные агенты для ответ
 """
 
 from .VerificationAgent import VerificationAgent
+from .ReleaseCoverAgent import ReleaseCoverAgent
+from .LyricsAgent import LyricsAgent
 
-__all__ = ['VerificationAgent']
+__all__ = ['VerificationAgent', 'ReleaseCoverAgent', 'LyricsAgent']
