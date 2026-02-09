@@ -1,0 +1,97 @@
+═══════════════════════════════════════════════════════════════
+                   АРХИТЕКТУРА СИСТЕМЫ
+═══════════════════════════════════════════════════════════════
+
+ТЕКУЩАЯ СТРУКТУРА (Упрощенная):
+
+    Пользователь
+         │
+         ▼
+    ┌─────────────────┐
+    │  ORCHESTRATOR   │  ← Анализирует вопрос
+    └────────┬────────┘
+             │
+             ▼
+    ┌─────────────────┐
+    │  VERIFICATION   │  ← Читает verification.txt
+    │     AGENT       │     и отвечает
+    └─────────────────┘
+             │
+             ▼
+         Ответ
+
+═══════════════════════════════════════════════════════════════
+                        КОМПОНЕНТЫ
+═══════════════════════════════════════════════════════════════
+
+1. OrchestratorAgent (app/agents/OrchestratorAgent.py)
+   → Проверяет что вопрос про верификацию
+   → Направляет к нужному агенту
+
+2. VerificationAgent (app/agents/faq/VerificationAgent.py)
+   → База знаний: app/services/faq/verification.txt
+   → Отвечает на вопросы о:
+     • Apple Music for Artists
+     • Spotify for Artists
+     • BandLink x Яндекс Музыка
+     • VK Studio
+
+3. WorkflowManager (app/agents/WorkflowManager.py)
+   → Управляет LangGraph workflow
+   → Связывает агентов
+
+═══════════════════════════════════════════════════════════════
+                    КАК ДОБАВИТЬ АГЕНТА
+═══════════════════════════════════════════════════════════════
+
+Шаг 1: Создать файл базы знаний
+   app/services/faq/new_topic.txt
+
+Шаг 2: Создать агента
+   app/agents/faq/NewTopicAgent.py
+   (скопировать структуру из VerificationAgent.py)
+
+Шаг 3: Обновить OrchestratorAgent.py
+   Добавить описание нового агента в промпт
+
+Шаг 4: Обновить WorkflowManager.py
+   self.new_topic_agent = NewTopicAgent()
+   workflow.add_node("new_topic_agent", ...)
+
+═══════════════════════════════════════════════════════════════
+                      ФАЙЛОВАЯ СТРУКТУРА
+═══════════════════════════════════════════════════════════════
+
+app/
+├── agents/
+│   ├── OrchestratorAgent.py       ← Роутер
+│   ├── WorkflowManager.py         ← LangGraph
+│   ├── State.py                   ← Состояние
+│   ├── LLMManager.py              ← OpenAI
+│   └── faq/
+│       ├── __init__.py
+│       └── VerificationAgent.py   ← FAQ агент
+│
+├── services/
+│   └── faq/
+│       └── verification.txt       ← База знаний (7779 символов)
+│
+└── api.py                         ← FastAPI endpoint
+
+test_agents.py                     ← Тесты
+
+═══════════════════════════════════════════════════════════════
+                         ПРИМЕРЫ
+═══════════════════════════════════════════════════════════════
+
+✅ Вопрос: "Как верифицироваться в Spotify?"
+   → Orchestrator: verification_agent
+   → VerificationAgent: читает verification.txt
+   → Ответ: Подробная инструкция по верификации
+
+✅ Вопрос: "Какие документы нужны для Apple Music?"
+   → Orchestrator: verification_agent
+   → VerificationAgent: находит раздел про документы
+   → Ответ: Список необходимых документов
+
+═══════════════════════════════════════════════════════════════

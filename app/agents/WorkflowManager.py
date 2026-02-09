@@ -1,62 +1,93 @@
 from langgraph.graph import StateGraph
 from app.agents.State import State
-from app.agents.ToolAgent import ToolAgent
+from app.agents.OrchestratorAgent import OrchestratorAgent
+from app.agents.faq import VerificationAgent
 from langgraph.graph import END
 import logging
 
 logger = logging.getLogger(__name__)
 
+
 class WorkflowManager:
     """
-    Tool-based workflow manager для музыкальной аналитики.
-    Упрощенный пайплайн: выбор инструмента → выполнение → форматирование
+    Multi-agent workflow manager с оркестратором
+    Архитектура: Orchestrator → Verification Agent
     """
     
     def __init__(self):
-        self.tool_agent = ToolAgent()
+        self.orchestrator = OrchestratorAgent()
+        self.verification_agent = VerificationAgent()
+        logger.info("✅ WorkflowManager инициализирован с Verification агентом")
 
     def create_workflow(self) -> StateGraph:
-        """Создание упрощенного графа workflow с инструментами."""
+        """Создание графа workflow с оркестратором и verification агентом"""
         workflow = StateGraph(State)
 
-        # Добавляем узлы для работы с инструментами
-        workflow.add_node("select_tool", self.tool_agent.select_tool)
-        workflow.add_node("execute_tool", self.tool_agent.execute_tool)
-        workflow.add_node("format_results", self.tool_agent.format_results)
+        # Добавляем узлы
+        workflow.add_node("orchestrator", self.orchestrator.route_question)
+        workflow.add_node("verification_agent", self.verification_agent.answer)
         
-        # Упрощенный граф: select → execute → format
-        workflow.add_edge("select_tool", "execute_tool")
-        workflow.add_edge("execute_tool", "format_results")
-        workflow.add_edge("format_results", END)
+        # Функция роутинга после оркестратора
+        def route_to_agent(state: dict) -> str:
+            """Роутинг к verification агенту"""
+            selected_agent = state.get('selected_agent', 'verification_agent')
+            logger.info(f"  → Роутинг к: {selected_agent}")
+            return selected_agent
         
-        # Точка входа - выбор инструмента
-        workflow.set_entry_point("select_tool")
+        # Точка входа - оркестратор
+        workflow.set_entry_point("orchestrator")
+        
+        # Условный роутинг от оркестратора к verification агенту
+        workflow.add_conditional_edges(
+            "orchestrator",
+            route_to_agent,
+            {
+                "verification_agent": "verification_agent"
+            }
+        )
+        
+        # Verification агент ведет к END
+        workflow.add_edge("verification_agent", END)
 
         return workflow
     
     def returnGraph(self):
-        """Возвращает скомпилированный граф."""
+        """Возвращает скомпилированный граф"""
         return self.create_workflow().compile()
 
-    def run_tool_agent(self, question: str, uuid: str, artist_name: str = None) -> dict:
-        """Запуск tool-based workflow."""
-        logger.info(">>> Запуск tool-based workflow")
+    def run_agent_workflow(self, question: str, uuid: str, artist_name: str = None) -> dict:
+        """Запуск multi-agent workflow"""
+        logger.info("=" * 80)
+        logger.info(">>> Запуск Multi-Agent Workflow")
+        logger.info("=" * 80)
+        
         app = self.create_workflow().compile()
         
         logger.info(f">>> Вопрос: {question}")
-        logger.info(f">>> Артист: {artist_name or 'Общая аналитика'}")
+        logger.info(f">>> Артист: {artist_name or 'Общий вопрос'}")
+        logger.info(f">>> UUID: {uuid}")
+        
         result = app.invoke({
             "question": question, 
             "uuid": uuid,
             "artist_name": artist_name
         })
         
+        logger.info("=" * 80)
         logger.info(">>> Workflow завершен")
-        logger.info(f"    - Инструмент: {result.get('tool_name', 'N/A')}")
-        logger.info(f"    - Ответ: {bool(result.get('answer'))}")
+        logger.info(f"    - Выбранный агент: {result.get('selected_agent', 'N/A')}")
+        logger.info(f"    - Использованный агент: {result.get('agent_used', 'N/A')}")
+        logger.info(f"    - Уверенность: {result.get('routing_confidence', 'N/A')}")
+        logger.info("=" * 80)
         
         return {
             "answer": result.get('answer', 'Ответ не сгенерирован'),
-            "tool_used": result.get('tool_name'),
-            "tool_parameters": result.get('tool_parameters')
+            "agent_used": result.get('agent_used'),
+            "routing_confidence": result.get('routing_confidence')
         }
+    
+    # Backward compatibility
+    def run_tool_agent(self, question: str, uuid: str, artist_name: str = None) -> dict:
+        """Обратная совместимость - перенаправляет на новый метод"""
+        logger.warning("⚠️  run_tool_agent deprecated, используйте run_agent_workflow")
+        return self.run_agent_workflow(question, uuid, artist_name)
