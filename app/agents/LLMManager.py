@@ -8,27 +8,27 @@ logger = logging.getLogger(__name__)
 
 class LLMManager:
     def __init__(self):
-        # Используем OpenAI API
-        self.api_key = os.getenv("OPENAI_API_KEY")
+        # Используем Alem.ai API с моделью Qwen3
+        self.api_key = os.getenv("ALEMAI_API_QWEN3_KEY")
         if not self.api_key:
-            raise ValueError("OPENAI_API_KEY not found in environment variables")
+            raise ValueError("ALEMAI_API_QWEN3_KEY not found in environment variables")
         
-        # Получаем base_url из переменной окружения (опционально)
-        base_url = os.getenv("OPENAI_BASE_URL", None)
+        # Получаем base_url из переменной окружения
+        base_url = os.getenv("ALEMAI_BASE_URL", "https://llm.alem.ai/v1")
         
-        # Инициализируем ChatOpenAI
+        # Инициализируем ChatOpenAI с Alem.ai endpoint
+        # LangChain's ChatOpenAI совместим с OpenAI-like API
         llm_kwargs = {
-            "model": "gpt-4",  # Можно поменять на gpt-4, gpt-3.5-turbo и т.д.
+            "model": "qwen3",  # Модель Qwen3 на Alem.ai
             "temperature": 0,
             "api_key": self.api_key,
+            "base_url": base_url,
             "timeout": 30.0,  # Таймаут в секундах
             "max_retries": 2,  # Количество повторных попыток
         }
-        
-        if base_url:
-            llm_kwargs["base_url"] = base_url
             
         self.llm = ChatOpenAI(**llm_kwargs)
+        logger.info(f"✅ LLMManager инициализирован с моделью qwen3 (Alem.ai)")
 
     def invoke(self, prompt: ChatPromptTemplate, **kwargs) -> str:
         try:
@@ -69,13 +69,14 @@ class LLMManager:
                 
         except APIConnectionError as e:
             raise RuntimeError(
-                f"Failed to connect to OpenAI API. Please check:\n"
+                f"Failed to connect to Alem.ai API. Please check:\n"
                 f"1. Your internet connection\n"
                 f"2. DNS settings\n"
                 f"3. Firewall/proxy settings\n"
+                f"4. API endpoint: {self.llm.openai_api_base}\n"
                 f"Original error: {str(e)}"
             )
         except APIError as e:
-            raise RuntimeError(f"OpenAI API error: {str(e)}")
+            raise RuntimeError(f"Alem.ai API error: {str(e)}")
         except Exception as e:
-            raise RuntimeError(f"Error generating answer with OpenAI: {str(e)}")
+            raise RuntimeError(f"Error generating answer with Alem.ai (Qwen3): {str(e)}")

@@ -136,15 +136,22 @@ class DocxReportGenerator:
             month_eng = datetime.now().strftime('%B')
             date_ru = date_eng.replace(month_eng, MONTHS_RU.get(month_eng, month_eng))
             
+            # Рассчитываем процентажи для раскладки
+            # Дистрибуция: 80% от общего (100% - 20% комиссия)
+            # Авторские: 8% от дистрибуции = 6.4% от общего
+            distribution_percentage = 80.0
+            copyright_percentage_of_total = copyright_percentage * distribution_percentage  # 8% от 80% = 6.4%
+            
             replacements = {
                 '17 ноября 2025 года': date_ru,
                 '{{ARTIST_NAME}}': exact_name,
                 '{{RELEASES}}': releases_list,
                 '{{PERIOD}}': period,
-                '{{DISTRIBUTION_PAYMENT}': f"{distribution_payment:,}".replace(',', ' ') + ' тенге',  # Добавляем тенге так как в шаблоне нет
-                '{{DISTRIBUTION_PAYMENT}}': f"{distribution_payment:,}".replace(',', ' ') + ' тенге',
-                '{{COPYRIGHT_PAYMENT}}': f"{copyright_payment:,}".replace(',', ' ') + ' тенге',
-                '{{TOTAL_PAYMENT}}': f"{total_payment:,}".replace(',', ' ') + ' тенге',
+                # Убираем конкретные суммы, оставляем только процентажи
+                '{{DISTRIBUTION_PAYMENT}': f"{distribution_percentage:.1f}%",
+                '{{DISTRIBUTION_PAYMENT}}': f"{distribution_percentage:.1f}%",
+                '{{COPYRIGHT_PAYMENT}}': f"{copyright_percentage_of_total:.1f}%",
+                '{{TOTAL_PAYMENT}}': "1 000 000 тенге",  # Условная сумма
             }
             
             # Заменяем текст в параграфах
@@ -208,14 +215,16 @@ class DocxReportGenerator:
             hdr = table1.rows[0].cells
             hdr[0].text = 'Название трека'
             hdr[1].text = 'Стримы'
-            hdr[2].text = 'Доход (EUR)'
+            hdr[2].text = '% от общего дохода'
             
             # Данные
             for i, (track_name, row) in enumerate(top_5_tracks.iterrows()):
                 cells = table1.rows[i + 1].cells
                 cells[0].text = track_name
                 cells[1].text = f"{int(row['Количество']):,}".replace(',', ' ')
-                cells[2].text = f"€{row['Сумма вознаграждения']:,.2f}"
+                # Добавляем процентаж от общего дохода
+                track_percentage = (row['Сумма вознаграждения'] / total_revenue_eur) * 100
+                cells[2].text = f"{track_percentage:.1f}%"
             
             doc.add_paragraph()
             
@@ -233,24 +242,22 @@ class DocxReportGenerator:
                 .head(10)
             )
             
-            table2 = doc.add_table(rows=len(top_platforms) + 1, cols=4)
+            table2 = doc.add_table(rows=len(top_platforms) + 1, cols=3)
             self._set_table_borders(table2)
             
             # Заголовки
             hdr = table2.rows[0].cells
             hdr[0].text = 'Платформа'
-            hdr[1].text = 'Доход (EUR)'
-            hdr[2].text = 'Стримы'
-            hdr[3].text = '% от общего'
+            hdr[1].text = 'Стримы'
+            hdr[2].text = '% от общего дохода'
             
             # Данные
             for i, (platform, row) in enumerate(top_platforms.iterrows()):
                 cells = table2.rows[i + 1].cells
                 cells[0].text = platform
-                cells[1].text = f"€{row['Сумма вознаграждения']:,.2f}"
-                cells[2].text = f"{int(row['Количество']):,}".replace(',', ' ')
+                cells[1].text = f"{int(row['Количество']):,}".replace(',', ' ')
                 percentage = (row['Сумма вознаграждения'] / total_revenue_eur) * 100
-                cells[3].text = f"{percentage:.1f}%"
+                cells[2].text = f"{percentage:.1f}%"
             
             doc.add_paragraph()
             
@@ -268,24 +275,22 @@ class DocxReportGenerator:
                 .head(5)
             )
             
-            table3 = doc.add_table(rows=len(top_countries) + 1, cols=4)
+            table3 = doc.add_table(rows=len(top_countries) + 1, cols=3)
             self._set_table_borders(table3)
             
             # Заголовки
             hdr = table3.rows[0].cells
             hdr[0].text = 'Страна'
-            hdr[1].text = 'Доход (EUR)'
-            hdr[2].text = 'Стримы'
-            hdr[3].text = '% от общего'
+            hdr[1].text = 'Стримы'
+            hdr[2].text = '% от общего дохода'
             
             # Данные
             for i, (country, row) in enumerate(top_countries.iterrows()):
                 cells = table3.rows[i + 1].cells
                 cells[0].text = country
-                cells[1].text = f"€{row['Сумма вознаграждения']:,.2f}"
-                cells[2].text = f"{int(row['Количество']):,}".replace(',', ' ')
+                cells[1].text = f"{int(row['Количество']):,}".replace(',', ' ')
                 percentage = (row['Сумма вознаграждения'] / total_revenue_eur) * 100
-                cells[3].text = f"{percentage:.1f}%"
+                cells[2].text = f"{percentage:.1f}%"
             
             # 5. Сохраняем
             safe_name = exact_name.replace(' ', '_').replace('/', '_')
@@ -299,9 +304,9 @@ class DocxReportGenerator:
             summary = (
                 f"📊 Отчет для {exact_name}\n"
                 f"📅 Период: {period}\n"
-                f"💰 Доход: €{total_revenue_eur:,.2f} / {total_payment:,} ₸\n"
                 f"🎵 Стримы: {total_streams:,}\n"
-                f"🎤 Треков: {len(top_tracks)}"
+                f"🎤 Треков: {len(top_tracks)}\n"
+                f"💡 Отчет содержит процентажи без конкретных сумм"
             )
             
             return {
